@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="120">
+  <title>Flottenstatus</title>
+  <style>
+    body { margin: 0; background: #fff; }
+    img  { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <img id="bild" alt="Flottenstatus">
+  <script>
+    document.getElementById('bild').src = 'flotte_status.png?t=' + Date.now();
+  </script>
+</body>
+</html>
