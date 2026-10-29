@@ -6,14 +6,34 @@
   <meta http-equiv="refresh" content="120">
   <title>Flottenstatus</title>
   <style>
-    body { margin: 0; background: #fff; }
-    img  { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #fff;
+      overflow: hidden;
+    }
+    img {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain;
+      cursor: zoom-in;
+    }
+    /* Klick: Originalgröße mit Scrollen */
+    body.zoom { overflow: auto; }
+    body.zoom img {
+      width: auto;
+      height: auto;
+      max-width: none;
+      object-fit: none;
+      cursor: zoom-out;
+    }
   </style>
 </head>
 <body>
   <img id="bild" alt="Flottenstatus">
   <script>
-    document.getElementById('bild').src = 'flotte_status.png?t=' + Date.now();
-  </script>
-</body>
-</html>
+    var img = document.getElementById('bild');
+    img.src = 'flotte_status.png?t=' + Date.now();
+    img.addEventListener('click', function () {
+      document.body.classList.toggle('zoom');
