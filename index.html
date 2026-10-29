@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="120">
-  <title>Flottenstatus v3</title>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <title>Flottenstatus v4</title>
   <style>
     html, body {
       margin: 0;
@@ -25,8 +26,23 @@
 <body>
   <div id="bild"></div>
   <script>
-    document.getElementById('bild').style.backgroundImage =
-      "url('flotte_status.png?t=" + Date.now() + "')";
+    var el = document.getElementById('bild');
+    var alteUrl = null;
+
+    function laden() {
+      fetch('flotte_status.png?t=' + Date.now(), { cache: 'no-store' })
+        .then(function (r) { return r.blob(); })
+        .then(function (b) {
+          var neu = URL.createObjectURL(b);
+          el.style.backgroundImage = "url('" + neu + "')";
+          if (alteUrl) URL.revokeObjectURL(alteUrl);
+          alteUrl = neu;
+        })
+        .catch(function () { /* beim nächsten Durchlauf erneut versuchen */ });
+    }
+
+    laden();
+    setInterval(laden, 60000);
   </script>
 </body>
 </html>
