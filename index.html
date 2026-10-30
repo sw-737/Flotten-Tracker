@@ -2,10 +2,10 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
-  <title>Flottenstatus v4</title>
+  <title>Flottenstatus v5</title>
   <style>
     html, body {
       margin: 0;
@@ -14,27 +14,152 @@
       overflow: hidden;
       background: #fff;
     }
-    #bild {
+    #stage {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background-repeat: no-repeat;
-      background-position: center center;
-      background-size: contain;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      cursor: zoom-in;
+      overflow: hidden;
+    }
+    #stage.zoomed { cursor: grab; }
+    #stage.dragging { cursor: grabbing; }
+    #bild {
+      max-width: 100%;
+      max-height: 100%;
+      transform-origin: center center;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-user-drag: none;
+      will-change: transform;
     }
   </style>
 </head>
 <body>
-  <div id="bild"></div>
+  <div id="stage"><img id="bild" alt="Flottenstatus" draggable="false"></div>
   <script>
-    var el = document.getElementById('bild');
+    var stage = document.getElementById('stage');
+    var img = document.getElementById('bild');
     var alteUrl = null;
 
+    /* ---------- Zoom / Pan ---------- */
+    var MIN = 1, MAX = 10;
+    var s = 1, tx = 0, ty = 0;
+    var pointers = new Map();
+    var last = null; // letzter Zustand für Pan/Pinch
+
+    function clampPan() {
+      var w = img.clientWidth * s, h = img.clientHeight * s;
+      var maxX = Math.max(0, (w - stage.clientWidth) / 2);
+      var maxY = Math.max(0, (h - stage.clientHeight) / 2);
+      tx = Math.min(maxX, Math.max(-maxX, tx));
+      ty = Math.min(maxY, Math.max(-maxY, ty));
+    }
+
+    function apply() {
+      if (s <= MIN) { s = MIN; tx = 0; ty = 0; }
+      clampPan();
+      img.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + s + ')';
+      stage.classList.toggle('zoomed', s > MIN);
+    }
+
+    function zoomAt(newS, px, py) {
+      newS = Math.min(MAX, Math.max(MIN, newS));
+      var cx = stage.clientWidth / 2, cy = stage.clientHeight / 2;
+      var k = newS / s;
+      tx = (px - cx) - (px - cx - tx) * k;
+      ty = (py - cy) - (py - cy - ty) * k;
+      s = newS;
+      apply();
+    }
+
+    function reset() { s = 1; tx = 0; ty = 0; apply(); }
+
+    stage.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      zoomAt(s * Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
+    }, { passive: false });
+
+    stage.addEventListener('dblclick', function (e) {
+      if (s > MIN) reset(); else zoomAt(2.5, e.clientX, e.clientY);
+    });
+
+    function pinchInfo() {
+      var p = Array.from(pointers.values());
+      return {
+        dist: Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y),
+        mx: (p[0].x + p[1].x) / 2,
+        my: (p[0].y + p[1].y) / 2
+      };
+    }
+
+    stage.addEventListener('pointerdown', function (e) {
+      stage.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) last = pinchInfo();
+      else last = { x: e.clientX, y: e.clientY };
+      if (pointers.size === 1 && s > MIN) stage.classList.add('dragging');
+
+      // Doppeltipp für Touch
+      if (e.pointerType === 'touch' && pointers.size === 1) {
+        var now = Date.now();
+        if (stage._lastTap && now - stage._lastTap < 300) {
+          if (s > MIN) reset(); else zoomAt(2.5, e.clientX, e.clientY);
+          stage._lastTap = 0;
+        } else {
+          stage._lastTap = now;
+        }
+      }
+    });
+
+    stage.addEventListener('pointermove', function (e) {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pointers.size === 2) {
+        var cur = pinchInfo();
+        if (last && last.dist) {
+          tx += cur.mx - last.mx;
+          ty += cur.my - last.my;
+          zoomAt(s * (cur.dist / last.dist), cur.mx, cur.my);
+        }
+        last = cur;
+      } else if (pointers.size === 1 && s > MIN && last) {
+        tx += e.clientX - last.x;
+        ty += e.clientY - last.y;
+        last = { x: e.clientX, y: e.clientY };
+        apply();
+      }
+    });
+
+    function endPointer(e) {
+      pointers.delete(e.pointerId);
+      stage.classList.remove('dragging');
+      if (pointers.size === 1) {
+        var p = Array.from(pointers.values())[0];
+        last = { x: p.x, y: p.y };
+      } else {
+        last = null;
+      }
+    }
+    stage.addEventListener('pointerup', endPointer);
+    stage.addEventListener('pointercancel', endPointer);
+
+    window.addEventListener('keydown', function (e) {
+      if (e.key === '0' || e.key === 'Escape') reset();
+    });
+    window.addEventListener('resize', apply);
+    img.addEventListener('load', apply);
+
+    /* ---------- Bild laden (alle 60 s) ---------- */
     function laden() {
       fetch('flotte_status.png?t=' + Date.now(), { cache: 'no-store' })
         .then(function (r) { return r.blob(); })
         .then(function (b) {
           var neu = URL.createObjectURL(b);
-          el.style.backgroundImage = "url('" + neu + "')";
+          img.src = neu; // Zoom-Zustand bleibt erhalten
           if (alteUrl) URL.revokeObjectURL(alteUrl);
           alteUrl = neu;
         })
